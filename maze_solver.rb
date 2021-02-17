@@ -8,13 +8,12 @@ class MazeSolver
     [ 1,  0]
     ].freeze
 
-    attr_reader :maze, :start
     def initialize(filename)
         @maze = File.readlines(filename).map(&:chomp).map { |line| line.split("") }
         @start = find_coor("S")
         @end = find_coor("E")
         @open = [@start] # the set of nodes to be evaluated
-        @close = { @start => nil } # the hash of nodes already evaluated
+        @close = { @start => nil } # the hash of nodes already evaluated and targeted to parent.
     end
 
     def find_coor(symbol) # To find start and end points.
@@ -23,7 +22,7 @@ class MazeSolver
         end
     end
 
-    def get_neighbours(pos)
+    def get_neighbours(pos) # Gets available neighbours.
         neighbours = DELTAS.map do |(dx, dy)|
             [pos[0] + dx, pos[1] + dy]
         end.select do |x, y|
@@ -50,42 +49,49 @@ class MazeSolver
     def solve
         while !@open.empty?
             current = @open.first
-            (0...@open.length).each do |i|
-                if f_score(@open[i]) < f_score(current) || f_score(@open[i]) == f_score(current) && h_score(@open[i]) < h_score(current)
-                    current = @open[i]
-                end
-            end
+            get_closest_node(current)
             @open.delete(current)
-            
             
             if current == @end
                 return mark_road
             end
 
-            get_neighbours(current).each do |neighbour|
-                if @close.include?(neighbour)
-                    next
-                end
-                if !@open.include?(neighbour) || g_score(current) + h_score(current, neighbour) < g_score(neighbour)
-                    @close[neighbour] = current
-                    if !@open.include?(neighbour)
-                        @open.unshift(neighbour)
-                    end
+            find_path(current)
+        end
+    end
+
+    def get_closest_node(node)
+        (0...@open.length).each do |i|
+            if f_score(@open[i]) < f_score(node) || f_score(@open[i]) == f_score(node) && h_score(@open[i]) < h_score(node)
+                return node = @open[i]
+            end
+        end
+    end
+
+    def find_path(current)
+        get_neighbours(current).each do |neighbour|
+            if @close.include?(neighbour)
+                next
+            end
+            if !@open.include?(neighbour) || g_score(current) + h_score(current, neighbour) < g_score(neighbour)
+                @close[neighbour] = current
+                if !@open.include?(neighbour)
+                    @open.unshift(neighbour)
                 end
             end
         end
     end
     
-    def build_path(target)
+    def build_path(target) # Gets path to array in order.
         path = []
         until target == nil
             path << target
-            target = @close[target]
+            target = @close[target] # { target => parent }
         end
         path.reverse
     end
 
-    def mark_road
+    def mark_road # Render method.
         path = build_path(@end)
         path.each do |ele|
             x, y = ele
