@@ -1,4 +1,5 @@
 require 'byebug'
+require 'set'
 class MazeSolver
     DELTAS = [
     [-1,  0],
@@ -12,8 +13,8 @@ class MazeSolver
         @maze = File.readlines(filename).map(&:chomp).map { |line| line.split("") }
         @start = find_coor("S")
         @end = find_coor("E")
-        # @open = [] # List that will take neighbors
-        @close = [@start] # Path
+        @open = [@start] # the set of nodes to be evaluated
+        @close = { @start => nil } # the hash of nodes already evaluated
     end
 
     def find_coor(symbol) # To find start and end points.
@@ -22,56 +23,78 @@ class MazeSolver
         end
     end
 
-    def get_neighbors(pos)
-        neighbors = DELTAS.map do |(dx, dy)|
+    def get_neighbours(pos)
+        neighbours = DELTAS.map do |(dx, dy)|
             [pos[0] + dx, pos[1] + dy]
         end.select do |x, y|
             @maze[x][y] != "*"
         end
     end
 
-    def h_score(pos)
+    def h_score(pos, a = @end) # Distance from end node
         x, y = pos
-        e_x, e_y = @end
+        e_x, e_y = a
         (x - e_x).abs + (y - e_y).abs
     end
 
+    def g_score(pos) # Distance from starting node
+        x, y = pos
+        s_x, s_y = @start
+        Math.sqrt((x - s_x)*(x - s_x) + (y - s_y)*(y - s_y))
+    end
+
     def f_score(pos)
-        h_score(pos) + @close.length
-    end
-
-    def get_highest(positions)
-        hash = {}
-        positions.each do |pos|
-            hash[pos] = f_score(pos)
-        end
-        hash = hash.sort_by { |key, value| value }
-        hash.each do |key, value|
-            return key if @close.include?(key) == false
-        end
-    end
-
-    def render        
-        system('clear')
-        @close.each do |ele|
-            x, y = ele
-            if @maze[x][y] == " "
-                @maze[x][y] = "X"
-            end
-        end
-        
-        @maze.each { |line| p line.join("") }
+        h_score(pos) + g_score(pos)
     end
 
     def solve
-        # debugger
-        until @close.include?(@end)
-            @close.unshift(get_highest(get_neighbors(@close.first)))
-            render
+        while !@open.empty?
+            current = @open.first
+            (0...@open.length).each do |i|
+                if f_score(@open[i]) < f_score(current) || f_score(@open[i]) == f_score(current) && h_score(@open[i]) < h_score(current)
+                    current = @open[i]
+                end
+            end
+            @open.delete(current)
+            
+            
+            if current == @end
+                return mark_road
+            end
+
+            get_neighbours(current).each do |neighbour|
+                if @close.include?(neighbour)
+                    next
+                end
+                if !@open.include?(neighbour) || g_score(current) + h_score(current, neighbour) < g_score(neighbour)
+                    @close[neighbour] = current
+                    if !@open.include?(neighbour)
+                        @open.unshift(neighbour)
+                    end
+                end
+            end
         end
+    end
+    
+    def build_path(target)
+        path = []
+        until target == nil
+            path << target
+            target = @close[target]
+        end
+        path.reverse
+    end
+
+    def mark_road
+        path = build_path(@end)
+        path.each do |ele|
+            x, y = ele
+            @maze[x][y] = "X" if @maze[x][y] == " "
+        end
+        @maze.each { |line| p line.join("") }
     end
 end
 
 if $PROGRAM_NAME == __FILE__
-    MazeSolver.new("./maze1.txt").solve
+    MazeSolver.new("./maze3.txt").solve
 end
